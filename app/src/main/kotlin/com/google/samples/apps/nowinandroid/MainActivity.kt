@@ -22,10 +22,32 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,7 +63,6 @@ import com.google.samples.apps.nowinandroid.core.data.util.NetworkMonitor
 import com.google.samples.apps.nowinandroid.core.data.util.TimeZoneMonitor
 import com.google.samples.apps.nowinandroid.core.designsystem.theme.NiaTheme
 import com.google.samples.apps.nowinandroid.core.ui.LocalTimeZone
-import com.google.samples.apps.nowinandroid.ui.NiaApp
 import com.google.samples.apps.nowinandroid.ui.rememberNiaAppState
 import com.google.samples.apps.nowinandroid.util.isSystemInDarkTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -55,9 +76,6 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    /**
-     * Lazily inject [JankStats], which is used to track jank throughout the app.
-     */
     @Inject
     lateinit var lazyStats: dagger.Lazy<JankStats>
 
@@ -79,8 +97,6 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // We keep this as a mutable state, so that we can track changes inside the composition.
-        // This allows us to react to dark/light mode changes.
         var themeSettings by mutableStateOf(
             ThemeSettings(
                 darkTheme = resources.configuration.isSystemInDarkTheme,
@@ -89,7 +105,6 @@ class MainActivity : ComponentActivity() {
             ),
         )
 
-        // Update the uiState
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(
@@ -107,11 +122,6 @@ class MainActivity : ComponentActivity() {
                     .distinctUntilChanged()
                     .collect { darkTheme ->
                         trace("niaEdgeToEdge") {
-                            // Turn off the decor fitting system windows, which allows us to handle insets,
-                            // including IME animations, and go edge-to-edge.
-                            // This is the same parameters as the default enableEdgeToEdge call, but we manually
-                            // resolve whether or not to show dark theme using uiState, since it can be different
-                            // than the configuration's dark theme value based on the user preference.
                             enableEdgeToEdge(
                                 statusBarStyle = SystemBarStyle.auto(
                                     lightScrim = android.graphics.Color.TRANSPARENT,
@@ -127,9 +137,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Keep the splash screen on-screen until the UI state is loaded. This condition is
-        // evaluated each time the app needs to be redrawn so it should be fast to avoid blocking
-        // the UI.
         splashScreen.setKeepOnScreenCondition { viewModel.uiState.value.shouldKeepSplashScreen() }
 
         setContent {
@@ -150,7 +157,8 @@ class MainActivity : ComponentActivity() {
                     androidTheme = themeSettings.androidTheme,
                     disableDynamicTheming = themeSettings.disableDynamicTheming,
                 ) {
-                    NiaApp(appState)
+                    // ဤနေရာတွင် မူလ NiaApp() အစား LunaPOSMainScreen ကို အစားထိုးလိုက်ပါသည်
+                    LunaPOSMainScreen()
                 }
             }
         }
@@ -167,24 +175,81 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/**
- * The default light scrim, as defined by androidx and the platform:
- * https://cs.android.com/androidx/platform/frameworks/support/+/androidx-main:activity/activity/src/main/java/androidx/activity/EdgeToEdge.kt;l=35-38;drc=27e7d52e8604a080133e8b842db10c89b4482598
- */
 private val lightScrim = android.graphics.Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
-
-/**
- * The default dark scrim, as defined by androidx and the platform:
- * https://cs.android.com/androidx/platform/frameworks/support/+/androidx-main:activity/activity/src/main/java/androidx/activity/EdgeToEdge.kt;l=40-44;drc=27e7d52e8604a080133e8b842db10c89b4482598
- */
 private val darkScrim = android.graphics.Color.argb(0x80, 0x1b, 0x1b, 0x1b)
 
-/**
- * Class for the system theme settings.
- * This wrapping class allows us to combine all the changes and prevent unnecessary recompositions.
- */
 data class ThemeSettings(
     val darkTheme: Boolean,
     val androidTheme: Boolean,
     val disableDynamicTheming: Boolean,
 )
+
+// ==========================================
+// LUNA POS CUSTOM UI CODES 
+// ==========================================
+
+// 3D Neumorphism Modifier
+fun Modifier.neumorphic(
+    elevation: Dp = 8.dp,
+    shape: Shape = RoundedCornerShape(16.dp)
+) = this
+    .shadow(elevation, shape, ambientColor = Color.White, spotColor = Color.Black)
+    .background(Color(0xFF2C3E50).copy(alpha = 0.8f), shape)
+    .border(1.dp, Color.White.copy(alpha = 0.2f), shape)
+
+// Luna POS Main Screen
+@Composable
+fun LunaPOSMainScreen() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF121212)) // လရောင်ညအလှ ပုံမထည့်ရသေးခင် ယာယီ Dark Background
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Title
+            Text(
+                text = "Luna POS",
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier
+                    .padding(top = 48.dp, start = 24.dp, end = 24.dp, bottom = 24.dp)
+                    .neumorphic(elevation = 12.dp)
+                    .padding(16.dp),
+                style = TextStyle(
+                    shadow = Shadow(
+                        color = Color(0xFF5D9CEC), // Moonlight Blue Shadow
+                        offset = Offset(5f, 5f),
+                        blurRadius = 10f
+                    )
+                )
+            )
+            
+            // အလယ် Content တွေ ထပ်ထည့်ရန် နေရာ
+            Text(
+                text = "Welcome to Luna POS",
+                color = Color.White,
+                modifier = Modifier.padding(24.dp)
+            )
+        }
+
+        // Bottom Navigation Bar
+        LunaBottomNavigationBar(
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+}
+
+// Temporary Bottom Navigation Bar
+@Composable
+fun LunaBottomNavigationBar(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .neumorphic()
+            .padding(16.dp)
+    ) {
+        Text(text = "Navigation Bar (Customer | Sale | Expense | Purchase | Report)", color = Color.White)
+    }
+}
